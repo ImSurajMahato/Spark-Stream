@@ -1,0 +1,21 @@
+name: spark-stream
+services:
+  spark:
+    build: .
+    restart: unless-stopped
+    env_file: fsb.env
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      GOMEMLIMIT: 350MiB
+      GOGC: "75"
+    mem_limit: 512m
+    pids_limit: 128
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    volumes:
+      - sessions:/app/data
+volumes:
+  sessions:
