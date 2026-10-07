@@ -1,0 +1,10 @@
+.git
+fsb.env
+.env
+*.session*
+sessions
+logs
+*.log
+*.zip
+*.tar.gz
+dist
