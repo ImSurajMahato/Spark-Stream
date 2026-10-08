@@ -3,7 +3,6 @@ package commands
 import (
 	"EverythingSuckz/fsb/config"
 	"EverythingSuckz/fsb/internal/catalog"
-	"EverythingSuckz/fsb/internal/security"
 	"EverythingSuckz/fsb/internal/utils"
 	"context"
 	"fmt"
@@ -23,6 +22,7 @@ var lookupSlots = make(chan struct{}, 8)
 func (m *command) LoadStart(d dispatcher.Dispatcher) {
 	d.AddHandler(handlers.NewCommand("start", start))
 	d.AddHandler(handlers.NewCommand("setslug", setSlug))
+	d.AddHandler(handlers.NewCallbackQuery(nil, lectureButton))
 }
 func privateChat(ctx *ext.Context, u *ext.Update) bool {
 	return ctx.PeerStorage.GetPeerById(u.EffectiveChat().GetID()).Type == int(storage.TypeUser)
@@ -33,7 +33,7 @@ func start(ctx *ext.Context, u *ext.Update) error {
 	}
 	args := strings.Fields(u.EffectiveMessage.Text)
 	if len(args) == 1 {
-		ctx.Reply(u, ext.ReplyTextString("Open a lecture's permanent bot link to get a fresh four-hour stream URL. Uploads and /setslug are owner-only."), nil)
+		ctx.Reply(u, ext.ReplyTextString("Open a lecture link, then choose Get Stream Link or Get File. Owners: send one file and enter its slug when asked, or /skip for random ID."), nil)
 		return dispatcher.EndGroups
 	}
 	if len(args) != 2 || !catalog.ValidSlug(args[1]) {
@@ -61,14 +61,17 @@ func start(ctx *ext.Context, u *ext.Update) error {
 		ctx.Reply(u, ext.ReplyTextString("Lecture unavailable. Check the ID or try again later."), nil)
 		return dispatcher.EndGroups
 	}
-	expiry := time.Now().Add(4 * time.Hour).Unix()
-	link := security.Link(config.ValueOf.Host, config.ValueOf.SigningSecret, entry.MessageID, entry.Hash, expiry)
-	_, err = ctx.Reply(u, ext.ReplyTextString("Fresh stream URL (valid for 4 hours):\n"+link+"\n\nCopy the full URL into MX Player Network stream or VLC Open network stream. After expiry, open the same bot link for a new URL. Playback depends on the file codec and network."), &ext.ReplyOpts{NoWebpage: true})
+	markup := &tg.ReplyInlineMarkup{Rows: []tg.KeyboardButtonRow{{Buttons: []tg.KeyboardButtonClass{
+		&tg.KeyboardButtonCallback{Text: "Get Stream Link", Data: []byte(fmt.Sprintf("s:%d", entry.MessageID))},
+		&tg.KeyboardButtonCallback{Text: "Get File", Data: []byte(fmt.Sprintf("f:%d", entry.MessageID))},
+	}}}}
+	_, err = ctx.Reply(u, ext.ReplyTextString("Choose how to open this lecture. Stream links last 4 hours from button click. Get File sends a Telegram copy; that copy does not expire."), &ext.ReplyOpts{Markup: markup, NoWebpage: true})
 	if err != nil {
 		return err
 	}
 	return dispatcher.EndGroups
 }
+
 func setSlug(ctx *ext.Context, u *ext.Update) error {
 	id := u.EffectiveChat().GetID()
 	if !privateChat(ctx, u) || !utils.Contains(config.ValueOf.AllowedUsers, id) {
