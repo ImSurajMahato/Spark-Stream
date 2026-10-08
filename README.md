@@ -9,11 +9,11 @@ Based on [EverythingSuckz/TG-FileStreamBot](https://github.com/EverythingSuckz/T
 - HTTP Range/seek, correct 206 headers, HEAD and invalid-range 416 support.
 - First block alone fetch hota hai; first 32KB response flush. After that parallel bounded prefetch.
 - At most 256KB per chunk, default 2 fetches + 4 queued chunks per request.
-- HMAC-SHA256 signed links, 32-character file hash, default 6-hour expiry. Missing/bad/expired signature is rejected BEFORE Telegram lookup.
+- HMAC-SHA256 signed links, 32-character file hash, fixed 4-hour expiry. Missing/bad/expired signature is rejected BEFORE Telegram lookup.
 - Required uploader allowlist, safe filenames, nosniff headers, unsafe document types forced to download.
 - Per-IP request rate limit with bounded map; global active stream cap, default 8 requests (not 8 guaranteed viewers).
 - Optional backend-only link mint API to refresh playback URLs without uploading a lecture again.
-- No student catalog, login, billing, DRM, transcoding or HLS ABR conversion is included.
+- No student login, enrollment, billing, DRM, transcoding or HLS ABR conversion is included.
 
 **Zero buffering promise nahi hai.** Telegram response, host bandwidth, student internet and video bitrate matter. This is a lower-startup-delay implementation, not a measured zero-buffer service. 512MB capacity has NOT been load tested; previous 20-30 viewer estimates should not be treated as guaranteed.
 
@@ -43,6 +43,30 @@ Compose builds THIS source, not the old upstream image. It exposes only localhos
 
 5. Send one MP4 lecture to your bot from an allowed Telegram ID. It forwards to the configured log channel and returns an expiring streaming URL. Keep the channel copy: deleting it breaks playback. Use URL directly in your EXISTING website's video player.
 6. Test start, seeking, pause/resume, several viewers, and disconnects before adding the full library. Do not assume Docker memory limits alone make the service fast.
+
+## Permanent custom ID + MongoDB + bot link
+
+Set MONGODB_URI privately in fsb.env and MONGODB_DATABASE=spark_stream. MongoDB must be a separate secured service, not another process squeezed into the 512MB streaming container. No database is provisioned by this repo. Require authentication/TLS, restrict network access and back up the catalog. The bot stops at startup if the database is unavailable. SQLite still holds Telegram session/peer state; MongoDB holds lecture mappings, not video bytes.
+
+1. Upload one lecture as an ALLOWED_USERS owner. Bot saves it in LOG_CHANNEL, generates a random 24-hex ID, stores the mapping and returns the permanent bot link plus log-channel message ID.
+2. To choose your ID manually, send the OWNER command:
+
+```text
+/setslug 6a2698f9735cb5428a449a0a 123
+```
+
+123 means the actual message ID in your configured log channel, NOT the ID from your original private chat. The bot checks the media, computes its hash and inserts the mapping. Allowed IDs: 1-64 ASCII letters, digits, underscore or hyphen. IDs are case-sensitive. Random IDs use crypto/rand. A duplicate ID for another lecture is rejected, never silently overwritten. Same-file retries are idempotent. You can create multiple aliases for one lecture. No delete/rebind command is provided.
+
+3. Share the returned `https://t.me/YOUR_REAL_BOT_USERNAME?start=6a2698f9735cb5428a449a0a`. YOUR_REAL_BOT_USERNAME is your deployed BotFather bot, not the example @streambot. The first visit may require pressing Start in Telegram. The bot resolves /start ID from MongoDB and returns a newly signed HTTPS stream URL.
+4. Student copies the COMPLETE URL including hash/expires/sig into MX Player's Network stream or VLC's Open network stream. This returns a URL, not an automatic app-launch guarantee. MP4 H.264/AAC is the practical trial format. Actual MX/VLC playback is not verified yet.
+
+**4 hours kya expire hota hai?** Only the generated stream URL, counted from issuance, not the permanent custom ID, Telegram file or MongoDB row. LINK_TTL_SECONDS must be 14400. Each new /start request issues a URL with a new expiry; requests in the same second can return the same URL. At exactly expiry new GET/HEAD/seek/reconnect requests get 403. A connection opened before expiry can continue; it is not forcibly cut off at the four-hour mark. Open the same permanent bot link to obtain another four-hour URL.
+
+MongoDB collection `lectures` stores `_id` as a STRING slug, `channel_id` (normalized positive configured channel ID), `message_id`, `hash` (32 hex) and `created_at`. There is NO TTL index. Do not store a 24-hex slug as BSON ObjectId: it must remain a string. The unique _id prevents races/rebinding. Preserve the Telegram channel copy. Changing LOG_CHANNEL requires a migration; mismatched records fail closed.
+
+Anyone who has the permanent slug can ask the bot for a fresh link. ALLOWED_USERS restricts uploads and /setslug only, not student /start. Slugs are identifiers, NOT an enrollment check. Anyone with a valid stream URL can share/use it until expiry. No one-time use, per-user binding, DRM or paid-student authorization is implied. Add explicit access checks before public use if your lectures require restricted enrollment.
+
+Bot lookup rate limit: 12/minute per Telegram chat, burst 4, bounded 4096-entry map and 8 concurrent catalog lookups. Mongo connection pool capped at 10. Runtime RAM with MongoDB driver has not been measured.
 
 ## Website integration and link refresh
 
@@ -85,7 +109,7 @@ Behind a proxy the default limiter sees the proxy IP, so all viewers may share o
 ## Test and limits
 
 ```sh
-go test -race ./internal/security
+go test -race ./internal/security ./internal/catalog
 go test -p 1 ./...
 go vet -p 1 ./...
 go build -p 1 -o spark-stream ./cmd/fsb
