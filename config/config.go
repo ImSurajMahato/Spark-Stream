@@ -52,8 +52,10 @@ type config struct {
 	AllowedUsers   allowedUsers `envconfig:"ALLOWED_USERS"`
 	MultiTokens    []string
 
+	MongoURI          string `envconfig:"MONGODB_URI" required:"true"`
+	MongoDatabase     string `envconfig:"MONGODB_DATABASE" default:"spark_stream"`
 	SigningSecret     string `envconfig:"SIGNING_SECRET" required:"true"`
-	LinkTTLSeconds    int    `envconfig:"LINK_TTL_SECONDS" default:"21600"`
+	LinkTTLSeconds    int    `envconfig:"LINK_TTL_SECONDS" default:"14400"`
 	MintAPIKey        string `envconfig:"MINT_API_KEY"`
 	MaxActiveStreams  int    `envconfig:"MAX_ACTIVE_STREAMS" default:"8"`
 	RequestsPerMinute int    `envconfig:"REQUESTS_PER_MINUTE" default:"120"`
@@ -227,8 +229,8 @@ func Load(log *zap.Logger, cmd *cobra.Command) {
 	if ValueOf.MintAPIKey != "" && (len(ValueOf.MintAPIKey) < 32 || ValueOf.MintAPIKey == ValueOf.SigningSecret) {
 		log.Fatal("MINT_API_KEY must be a separate random secret of at least 32 characters")
 	}
-	if ValueOf.LinkTTLSeconds < 60 || ValueOf.LinkTTLSeconds > 604800 {
-		log.Fatal("LINK_TTL_SECONDS must be 60 to 604800")
+	if ValueOf.LinkTTLSeconds != 14400 {
+		log.Fatal("LINK_TTL_SECONDS must be 14400 (four hours)")
 	}
 	if ValueOf.MaxActiveStreams < 1 || ValueOf.MaxActiveStreams > 32 {
 		log.Fatal("MAX_ACTIVE_STREAMS must be 1 to 32")
