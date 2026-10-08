@@ -49,7 +49,7 @@ type config struct {
 	UseSessionFile bool         `envconfig:"USE_SESSION_FILE" default:"true"`
 	UserSession    string       `envconfig:"USER_SESSION"`
 	UsePublicIP    bool         `envconfig:"USE_PUBLIC_IP" default:"false"`
-	AllowedUsers   allowedUsers `envconfig:"ALLOWED_USERS"`
+	AllowedUsers   allowedUsers `envconfig:"ALLOWED_USERS" default:"7513979260"`
 	MultiTokens    []string
 
 	MongoURI          string `envconfig:"MONGODB_URI" required:"true"`
