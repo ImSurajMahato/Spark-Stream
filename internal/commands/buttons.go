@@ -13,6 +13,7 @@ import (
 	"github.com/celestix/gotgproto/dispatcher"
 	"github.com/celestix/gotgproto/ext"
 	"github.com/gotd/td/tg"
+	"github.com/gotd/td/tgerr"
 )
 
 func lectureButton(ctx *ext.Context, u *ext.Update) error {
@@ -85,14 +86,30 @@ func lectureButton(ctx *ext.Context, u *ext.Update) error {
 	if to.Zero() {
 		return fail("Open the bot's private chat again.")
 	}
-	// Server-side Telegram copy, no downloading bytes to this 512MB host.
-	// Respect protected-content and flood errors: no bypass or tight retry.
-	_, err = ctx.Raw.MessagesForwardMessages(req, &tg.MessagesForwardMessagesRequest{
-		FromPeer: &tg.InputPeerChannel{ChannelID: channel.ChannelID, AccessHash: channel.AccessHash},
-		ToPeer:   to, ID: []int{e.MessageID}, RandomID: []int64{rand.Int63()}, DropAuthor: true, DropMediaCaptions: true,
-	})
-	if err != nil {
-		return fail("Telegram could not send this file (it may be protected or rate-limited). Try later or ask the owner to check channel settings.")
+	// Persist deletion intent BEFORE delivery. Refuse to send if MongoDB fails.
+	recipient, ok := to.(*tg.InputPeerUser)
+	if !ok {
+		return fail("Open the bot's private chat again.")
 	}
-	return dispatcher.EndGroups
+	jobID, err := catalog.RandomSlug()
+	if err != nil {
+		return fail("Could not prepare file delivery.")
+	}
+	job := catalog.NewDelivery(jobID, cb.UserID, recipient.AccessHash, e.ChannelID, rand.Int63(), e.MessageID, e.Hash, time.Now())
+	if err = catalog.Default.QueueDelivery(req, job); err != nil {
+		return fail("Could not save auto-delete job. No file sent; try later.")
+	}
+	copiedID, err := sendProtected(req, ctx, job)
+	if err != nil {
+		if wait, ok := tgerr.AsFloodWait(err); ok {
+			retryCtx, retryCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			_ = catalog.Default.RetryDelivery(retryCtx, job, wait, false, "flood_wait")
+			retryCancel()
+		}
+		return fail("Telegram did not confirm delivery. The bot will retry with the same delivery ID; do not repeatedly click. Ask the owner if no file arrives.")
+	}
+	if err = catalog.Default.DeliverySent(req, job, copiedID); err != nil {
+		return fail("File sent with content protection, but auto-delete confirmation is pending. Ask the owner to check the deletion queue.")
+	}
+	return fail("Protected file sent. Auto-delete is scheduled for 4 hours from this delivery request. Normal Telegram forwarding/saving is disabled. Deletion can be late if the bot is offline. This is not DRM.")
 }
