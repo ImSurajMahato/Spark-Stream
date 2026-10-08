@@ -27,3 +27,11 @@ Owner ID 7513979260 set from Suraj's original request. Added durable MongoDB pen
 Local: gofmt; race tests for catalog/security pass, config compile passes. New callback parser tests cover valid action/message IDs, zero/negative/overflow, non-canonical IDs, wrong action and malformed data. Full command compilation timed out while compiling generated Telegram code on this ~2GB machine. No claim of full-build success. No live MongoDB pending restart/concurrent conflict test, Telegram buttons/file copy, stream/player, protected-channel behavior, Docker or 512MB load test.
 
 Required trial: build/test/vet whole app on adequate RAM; one bot replica; configure owner and test MongoDB; owner upload->manual slug, /skip, /cancel, invalid/duplicate slug, second upload while pending, restart while pending, DB outage before/after forwarding and cleanup retry; non-owner upload denial; 64-char slug buttons; /start followed by each button; delivered file equality; deleted/changed/protected media errors; button rate limits; four-hour stream expiry and refresh. Confirm copied files remain available independent of URL expiry.
+
+
+## 2026-10-08 protected copies and deletion queue
+
+- gofmt, go mod verify, catalog/security race tests and config compilation passed. New tests cover fixed four-hour delivery deadline, BSON millisecond normalization, invalid sent records and bounded retry delays.
+- Full command compilation timed out compiling generated Telegram dependencies in this roughly 2GB environment. Full application/Docker build remains UNVERIFIED.
+- No live MongoDB queue/index roundtrip, Telegram protected-copy, copied-ID extraction, crash/dedup recovery, delete/revoke, blocked/deleted-user behavior or actual four-hour wait test was performed. No host deployment or playback/load test.
+- Required trial: one file, check normal forwarding/saving disabled, restart bot before deadline, verify only student copy disappears after four hours plus sweep latency, original and slug remain, click again, inspect failure records and simulate DB failure before send. Test crash after Telegram send/before Mongo save, network failures, flood waits and overdue jobs. A permanently offline bot cannot delete on time; no promise of DRM or erasing extracted files.
