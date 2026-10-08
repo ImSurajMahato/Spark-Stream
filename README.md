@@ -30,7 +30,7 @@ chmod 600 fsb.env
 openssl rand -hex 32
 ```
 
-3. Edit fsb.env: API_ID, API_HASH, BOT_TOKEN, LOG_CHANNEL, ALLOWED_USERS, HOST and SIGNING_SECRET. Paste the generated random value only into SIGNING_SECRET locally. Example ALLOWED_USERS=your_numeric_ID, no username or placeholder text. HOST is your HTTPS streaming domain with no trailing slash. PORT=8080 with this compose file.
+3. Edit fsb.env: API_ID, API_HASH, BOT_TOKEN, LOG_CHANNEL, ALLOWED_USERS, HOST and SIGNING_SECRET. Paste the generated random value only into SIGNING_SECRET locally. ALLOWED_USERS=7513979260 is prefilled for Suraj (the numeric ID he supplied). The same ID is the default when the variable is absent. Set your own IDs before reusing this source for another owner; no username or placeholder text. HOST is your HTTPS streaming domain with no trailing slash. PORT=8080 with this compose file.
 4. Start:
 
 ```sh
@@ -41,15 +41,17 @@ docker compose logs --tail=60 spark
 
 Compose builds THIS source, not the old upstream image. It exposes only localhost:8080: put your existing HTTPS reverse proxy in front. The session volume survives restarts. Never expose plain HTTP or the mint key publicly. On hosted platforms without compose, build the included Dockerfile, set the same environment variables and their required PORT, add persistent writable /app/data if supported. Ephemeral sessions cause repeat logins.
 
-5. Send one MP4 lecture to your bot from an allowed Telegram ID. It forwards to the configured log channel and returns an expiring streaming URL. Keep the channel copy: deleting it breaks playback. Use URL directly in your EXISTING website's video player.
+5. Send one MP4 lecture to your bot from an allowed Telegram ID. It saves to the configured log channel and asks for a custom slug. Enter it, or /skip for a random ID. The bot returns a permanent lecture link with stream/file choices. Keep the channel copy: deleting it breaks playback. Use URL directly in your EXISTING website's video player.
 6. Test start, seeking, pause/resume, several viewers, and disconnects before adding the full library. Do not assume Docker memory limits alone make the service fast.
 
 ## Permanent custom ID + MongoDB + bot link
 
 Set MONGODB_URI privately in fsb.env and MONGODB_DATABASE=spark_stream. MongoDB must be a separate secured service, not another process squeezed into the 512MB streaming container. No database is provisioned by this repo. Require authentication/TLS, restrict network access and back up the catalog. The bot stops at startup if the database is unavailable. SQLite still holds Telegram session/peer state; MongoDB holds lecture mappings, not video bytes.
 
-1. Upload one lecture as an ALLOWED_USERS owner. Bot saves it in LOG_CHANNEL, generates a random 24-hex ID, stores the mapping and returns the permanent bot link plus log-channel message ID.
-2. To choose your ID manually, send the OWNER command:
+1. Upload ONE lecture as the owner (7513979260). Bot saves it in LOG_CHANNEL, creates a random 24-hex fallback ID and asks you to enter a custom slug. Reply with only your slug, for example `6a2698f9735cb5428a449a0a`. No separate /setslug command needed. Use `/skip` for the random ID; `/cancel` also keeps the random link and closes the prompt (does NOT delete the file).
+
+The bot waits for this file to finish before accepting another file. A second upload is NOT forwarded while a slug is pending: resend it after finishing the first. Pending state is stored in MongoDB, so a restart does not lose the prompt. Duplicate/invalid slugs keep the current file pending; try another ID. Random fallback remains usable even after selecting a custom alias. Deploy only ONE bot process/replica: per-owner request serialization is process-local, not a distributed upload queue. This is not a bulk/album uploader. Database errors fail closed; if saving a prompt/catalog fails after forwarding, the reply provides a fallback link or log message ID for /setslug recovery. Telegram/network uncertain sends can still need checking the log channel before retrying.
+2. /setslug remains an optional OWNER recovery/extra-alias command:
 
 ```text
 /setslug 6a2698f9735cb5428a449a0a 123
@@ -57,14 +59,16 @@ Set MONGODB_URI privately in fsb.env and MONGODB_DATABASE=spark_stream. MongoDB 
 
 123 means the actual message ID in your configured log channel, NOT the ID from your original private chat. The bot checks the media, computes its hash and inserts the mapping. Allowed IDs: 1-64 ASCII letters, digits, underscore or hyphen. IDs are case-sensitive. Random IDs use crypto/rand. A duplicate ID for another lecture is rejected, never silently overwritten. Same-file retries are idempotent. You can create multiple aliases for one lecture. No delete/rebind command is provided.
 
-3. Share the returned `https://t.me/YOUR_REAL_BOT_USERNAME?start=6a2698f9735cb5428a449a0a`. YOUR_REAL_BOT_USERNAME is your deployed BotFather bot, not the example @streambot. The first visit may require pressing Start in Telegram. The bot resolves /start ID from MongoDB and returns a newly signed HTTPS stream URL.
+3. Share the returned `https://t.me/YOUR_REAL_BOT_USERNAME?start=6a2698f9735cb5428a449a0a`. YOUR_REAL_BOT_USERNAME is your deployed BotFather bot, not the example @streambot. The first visit may require pressing Start in Telegram. The bot resolves /start ID from MongoDB and shows two inline buttons: **Get Stream Link** and **Get File**. Get Stream Link generates a fresh signed HTTPS URL when clicked. Get File copies the actual media from LOG_CHANNEL into the student's private chat using Telegram server-side delivery, without downloading the full file into this host. Captions and forward attribution are stripped. Protected-content restrictions and Telegram flood limits are respected; failure returns an error, not a bypass. Deleted/changed source media fails closed.
 4. Student copies the COMPLETE URL including hash/expires/sig into MX Player's Network stream or VLC's Open network stream. This returns a URL, not an automatic app-launch guarantee. MP4 H.264/AAC is the practical trial format. Actual MX/VLC playback is not verified yet.
 
-**4 hours kya expire hota hai?** Only the generated stream URL, counted from issuance, not the permanent custom ID, Telegram file or MongoDB row. LINK_TTL_SECONDS must be 14400. Each new /start request issues a URL with a new expiry; requests in the same second can return the same URL. At exactly expiry new GET/HEAD/seek/reconnect requests get 403. A connection opened before expiry can continue; it is not forcibly cut off at the four-hour mark. Open the same permanent bot link to obtain another four-hour URL.
+**4 hours kya expire hota hai?** Only the generated stream URL, counted from issuance, not the permanent custom ID, Telegram file or MongoDB row. LINK_TTL_SECONDS must be 14400. Each Get Stream Link button click issues a URL with a new expiry; requests in the same second can return the same URL. At exactly expiry new GET/HEAD/seek/reconnect requests get 403. A connection opened before expiry can continue; it is not forcibly cut off at the four-hour mark. Open the same permanent bot link to obtain another four-hour URL.
 
-MongoDB collection `lectures` stores `_id` as a STRING slug, `channel_id` (normalized positive configured channel ID), `message_id`, `hash` (32 hex) and `created_at`. There is NO TTL index. Do not store a 24-hex slug as BSON ObjectId: it must remain a string. The unique _id prevents races/rebinding. Preserve the Telegram channel copy. Changing LOG_CHANNEL requires a migration; mismatched records fail closed.
+MongoDB `pending_uploads` stores one unfinished prompt per owner, including its random fallback entry and original upload message ID. `/skip`, `/cancel` or a successful custom slug clears it. These records have no automatic expiry. MongoDB collection `lectures` stores `_id` as a STRING slug, `channel_id` (normalized positive configured channel ID), `message_id`, `hash` (32 hex) and `created_at`. There is NO TTL index. Do not store a 24-hex slug as BSON ObjectId: it must remain a string. The unique _id prevents races/rebinding. Preserve the Telegram channel copy. Changing LOG_CHANNEL requires a migration; mismatched records fail closed.
 
-Anyone who has the permanent slug can ask the bot for a fresh link. ALLOWED_USERS restricts uploads and /setslug only, not student /start. Slugs are identifiers, NOT an enrollment check. Anyone with a valid stream URL can share/use it until expiry. No one-time use, per-user binding, DRM or paid-student authorization is implied. Add explicit access checks before public use if your lectures require restricted enrollment.
+Anyone who has the permanent slug can ask the bot for a fresh link. ALLOWED_USERS restricts uploads, slug prompts and /setslug only, not student /start or the buttons. Slugs are identifiers, NOT an enrollment check. Anyone with a valid stream URL can share/use it until expiry. No one-time use, per-user binding, DRM or paid-student authorization is implied. Add explicit access checks before public use if your lectures require restricted enrollment.
+
+**Get File copies do not expire after four hours.** The four-hour policy only controls HTTP stream URLs. A recipient can save/share a delivered file. No auto-delete or copy protection is included. Both button actions are public to anyone holding a slug.
 
 Bot lookup rate limit: 12/minute per Telegram chat, burst 4, bounded 4096-entry map and 8 concurrent catalog lookups. Mongo connection pool capped at 10. Runtime RAM with MongoDB driver has not been measured.
 
