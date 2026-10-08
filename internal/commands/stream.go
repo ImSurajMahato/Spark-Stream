@@ -1,7 +1,9 @@
 package commands
 
 import (
+	"EverythingSuckz/fsb/internal/catalog"
 	"EverythingSuckz/fsb/internal/security"
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -100,7 +102,19 @@ func sendLink(ctx *ext.Context, u *ext.Update) error {
 	)
 	hash := utils.GetShortHash(fullHash)
 	link := security.Link(config.ValueOf.Host, config.ValueOf.SigningSecret, messageID, hash, time.Now().Add(time.Duration(config.ValueOf.LinkTTLSeconds)*time.Second).Unix())
-	text := styling.Code(link)
+	slug, err := catalog.RandomSlug()
+	if err != nil {
+		return err
+	}
+	dbctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	err = catalog.Default.Add(dbctx, catalog.Entry{Slug: slug, ChannelID: config.ValueOf.LogChannelID, MessageID: messageID, Hash: hash})
+	cancel()
+	if err != nil {
+		ctx.Reply(u, ext.ReplyTextString(fmt.Sprintf("File saved in log channel as message %d, but catalog save failed. Retry with /setslug custom_ID %d.", messageID, messageID)), nil)
+		return dispatcher.EndGroups
+	}
+	permanent := fmt.Sprintf("https://t.me/%s?start=%s", ctx.Self.Username, slug)
+	text := styling.Code(fmt.Sprintf("Permanent bot link: %s\nLog channel message ID: %d\nFresh 4-hour stream URL: %s\nManual ID: /setslug custom_ID %d", permanent, messageID, link, messageID))
 	row := tg.KeyboardButtonRow{
 		Buttons: []tg.KeyboardButtonClass{
 			&tg.KeyboardButtonURL{
