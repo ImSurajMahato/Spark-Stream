@@ -93,3 +93,41 @@ func (s *Store) Add(ctx context.Context, e Entry) error {
 	}
 	return err
 }
+
+// Pending uploads survive restarts. The random fallback is already catalogued.
+type Pending struct {
+	Owner    int64 `bson:"_id"`
+	Entry    Entry `bson:"entry"`
+	SourceID int   `bson:"source_id"`
+}
+
+func (s *Store) Pending(ctx context.Context, owner int64) (Pending, error) {
+	var p Pending
+	err := s.client.Database(s.collection.Database().Name()).Collection("pending_uploads").FindOne(ctx, bson.M{"_id": owner}).Decode(&p)
+	if err == nil && (!p.Entry.Valid() || p.Owner != owner) {
+		return p, errors.New("invalid pending upload")
+	}
+	return p, err
+}
+func (s *Store) SavePending(ctx context.Context, p Pending) error {
+	if p.Owner <= 0 || !p.Entry.Valid() || p.SourceID <= 0 {
+		return errors.New("invalid pending upload")
+	}
+	_, err := s.collection.Database().Collection("pending_uploads").InsertOne(ctx, p)
+	return err
+}
+func (s *Store) ClearPending(ctx context.Context, p Pending) error {
+	_, err := s.collection.Database().Collection("pending_uploads").DeleteOne(ctx, bson.M{"_id": p.Owner, "entry.message_id": p.Entry.MessageID, "source_id": p.SourceID})
+	return err
+}
+func (s *Store) ByMessage(ctx context.Context, channel int64, id int) (Entry, error) {
+	var e Entry
+	if channel <= 0 || id <= 0 {
+		return e, errors.New("invalid message")
+	}
+	err := s.collection.FindOne(ctx, bson.M{"channel_id": channel, "message_id": id}).Decode(&e)
+	if err == nil && !e.Valid() {
+		err = errors.New("invalid catalog record")
+	}
+	return e, err
+}
