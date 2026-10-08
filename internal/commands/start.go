@@ -65,7 +65,7 @@ func start(ctx *ext.Context, u *ext.Update) error {
 		&tg.KeyboardButtonCallback{Text: "Get Stream Link", Data: []byte(fmt.Sprintf("s:%d", entry.MessageID))},
 		&tg.KeyboardButtonCallback{Text: "Get File", Data: []byte(fmt.Sprintf("f:%d", entry.MessageID))},
 	}}}}
-	_, err = ctx.Reply(u, ext.ReplyTextString("Choose how to open this lecture. Stream links last 4 hours from button click. Get File sends a Telegram copy; that copy does not expire."), &ext.ReplyOpts{Markup: markup, NoWebpage: true})
+	_, err = ctx.Reply(u, ext.ReplyTextString("Choose how to open this lecture. Stream links last 4 hours from button click. Get File sends a protected Telegram copy with auto-delete scheduled 4 hours from its delivery request. Normal forwarding/saving is disabled; this is not DRM and deletion may be late if the bot is offline."), &ext.ReplyOpts{Markup: markup, NoWebpage: true})
 	if err != nil {
 		return err
 	}
