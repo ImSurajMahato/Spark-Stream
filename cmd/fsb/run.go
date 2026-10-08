@@ -5,6 +5,7 @@ import (
 	"EverythingSuckz/fsb/internal/bot"
 	"EverythingSuckz/fsb/internal/cache"
 	"EverythingSuckz/fsb/internal/catalog"
+	"EverythingSuckz/fsb/internal/commands"
 	"EverythingSuckz/fsb/internal/routes"
 	"EverythingSuckz/fsb/internal/types"
 	"EverythingSuckz/fsb/internal/utils"
@@ -44,6 +45,12 @@ func runApp(cmd *cobra.Command, args []string) {
 		mainLogger.Fatal("MongoDB unavailable; check local connection settings")
 	}
 	catalog.Default = store
+	indexCtx, indexCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	err = store.InitDeliveries(indexCtx)
+	indexCancel()
+	if err != nil {
+		mainLogger.Fatal("Could not initialize file deletion queue")
+	}
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -55,6 +62,9 @@ func runApp(cmd *cobra.Command, args []string) {
 	if err != nil {
 		log.Sugar().Fatalf("Failed to start main bot: %v", err)
 	}
+	deleteCtx, stopDeletion := context.WithCancel(context.Background())
+	defer stopDeletion()
+	go commands.RunFileDeletion(deleteCtx, mainBot.CreateContext(), log.Named("FileDeletion"))
 	cache.InitCache(log)
 	workers, err := bot.StartWorkers(log)
 	if err != nil {
