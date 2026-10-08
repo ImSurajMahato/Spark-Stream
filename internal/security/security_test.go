@@ -3,6 +3,7 @@ package security
 import (
 	"mime"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -84,4 +85,18 @@ func TestLimiter(t *testing.T) {
 		go func() { defer wg.Done(); l.Allow("c", now.Add(11*time.Minute)) }()
 	}
 	wg.Wait()
+}
+
+func TestFourHourBoundary(t *testing.T) {
+	now := time.Unix(2000000000, 0)
+	secret := strings.Repeat("s", 32)
+	hash := strings.Repeat("a", 32)
+	exp := now.Add(4 * time.Hour).Unix()
+	sig := Signature(secret, 123, hash, exp)
+	if !Verify(secret, 123, hash, strconv.FormatInt(exp, 10), sig, now.Add(4*time.Hour-time.Second), 4*time.Hour) {
+		t.Fatal("early expiry")
+	}
+	if Verify(secret, 123, hash, strconv.FormatInt(exp, 10), sig, now.Add(4*time.Hour), 4*time.Hour) {
+		t.Fatal("accepted exact expiry")
+	}
 }
