@@ -4,9 +4,11 @@ import (
 	"EverythingSuckz/fsb/config"
 	"EverythingSuckz/fsb/internal/bot"
 	"EverythingSuckz/fsb/internal/cache"
+	"EverythingSuckz/fsb/internal/catalog"
 	"EverythingSuckz/fsb/internal/routes"
 	"EverythingSuckz/fsb/internal/types"
 	"EverythingSuckz/fsb/internal/utils"
+	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -35,6 +37,18 @@ func runApp(cmd *cobra.Command, args []string) {
 	log := utils.Logger
 	mainLogger := log.Named("Main")
 	mainLogger.Info("Starting server")
+	dbctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	store, err := catalog.Open(dbctx, config.ValueOf.MongoURI, config.ValueOf.MongoDatabase)
+	cancel()
+	if err != nil {
+		mainLogger.Fatal("MongoDB unavailable; check local connection settings")
+	}
+	catalog.Default = store
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = store.Close(ctx)
+	}()
 	router := getRouter(log)
 
 	mainBot, err := bot.StartClient(log)
