@@ -94,6 +94,42 @@ curl -X POST "$STREAM_HOST/api/link/$MESSAGE_ID" \
 
 Response: JSON with url and expires. Set video.src to url. Request fresh URL before expiry, or retry once with a refreshed URL on a 403 and restore video.currentTime. No automated player refresh implementation is included. Existing connections may finish after link expiry; new range requests cannot. A valid URL is shareable until expiry; this is not DRM or per-student binding. Rotating SIGNING_SECRET invalidates all old URLs.
 
+### Video ID API: GET /api/stream?videoId=SLUG
+
+Lets your website ask for a fresh 4 hour stream URL using the lecture slug (the ID you set in the bot after upload). Needs MINT_API_KEY set (add it in Railway Variables, 32+ random characters, different from SIGNING_SECRET). Without it the endpoint is not registered. Slugs come from MongoDB, so MONGODB_URI must be working.
+
+```sh
+curl "$STREAM_HOST/api/stream?videoId=6a2698f9735cb5428a449a0a" \
+  -H "X-API-Key: $MINT_API_KEY"
+```
+
+Success (200):
+
+```json
+{"videoId":"6a2698f9735cb5428a449a0a","url":"https://your-host/stream/123?hash=...&expires=...&sig=...","expires_at":"2026-10-10T03:30:00Z","expires":1791603000}
+```
+
+Errors are JSON like {"error":"not_found","message":"..."}: 401 unauthorized (missing or wrong key), 400 bad_video_id, 404 not_found, 429 rate_limited (per IP, see rate limit settings), 503 catalog_unavailable or catalog_error. The key can also be sent as Authorization: Bearer KEY.
+
+The key must stay on YOUR website backend. A browser page cannot call this directly without exposing the key, and there is no key-free mode on purpose (anyone with a slug could then mint links forever). Flow: player page calls your backend, e.g. /my-video?videoId=abc, your backend checks the student is logged in, calls this API with the key, and returns {url} to the page. Node example for the backend:
+
+```js
+// Express route on YOUR website backend
+app.get('/my-video', async (req, res) => {
+  // check the user's login/enrollment here first
+  const r = await fetch(`${process.env.STREAM_HOST}/api/stream?videoId=${encodeURIComponent(req.query.videoId)}`,
+    { headers: { 'X-API-Key': process.env.MINT_API_KEY } });
+  res.status(r.status).json(await r.json());
+});
+```
+
+Player page:
+
+```js
+const { url, expires_at } = await (await fetch('/my-video?videoId=' + id)).json();
+video.src = url; // refetch before expires_at, or on a 403, and restore currentTime
+```
+
 Set Referrer-Policy: no-referrer on your website; do not log signed query strings in proxies/analytics. Server logs paths/status only, not query credentials. Put streaming on a separate origin. Cross-origin browser video.src normally works; fetch/canvas access needs deliberately configured CORS, not wildcard credential CORS.
 
 ## 5,000-10,000 lectures
