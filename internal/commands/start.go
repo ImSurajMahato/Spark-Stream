@@ -3,6 +3,9 @@ package commands
 import (
 	"EverythingSuckz/fsb/config"
 	"EverythingSuckz/fsb/internal/catalog"
+	
+"EverythingSuckz/fsb/internal/security"
+
 	"EverythingSuckz/fsb/internal/utils"
 	"context"
 	"fmt"
