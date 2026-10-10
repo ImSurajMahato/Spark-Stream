@@ -232,8 +232,8 @@ func Load(log *zap.Logger, cmd *cobra.Command) {
 	if ValueOf.LinkTTLSeconds != 14400 {
 		log.Fatal("LINK_TTL_SECONDS must be 14400 (four hours)")
 	}
-	if ValueOf.MaxActiveStreams < 1 || ValueOf.MaxActiveStreams > 32 {
-		log.Fatal("MAX_ACTIVE_STREAMS must be 1 to 32")
+	if ValueOf.MaxActiveStreams < 1 || ValueOf.MaxActiveStreams > 200 {
+		log.Fatal("MAX_ACTIVE_STREAMS must be 1 to 200")
 	}
 	if ValueOf.RequestsPerMinute < 1 || ValueOf.RequestBurst < 1 {
 		log.Fatal("request limits must be positive")
