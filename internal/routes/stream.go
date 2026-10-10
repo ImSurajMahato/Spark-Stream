@@ -19,6 +19,21 @@ import (
 	"time"
 )
 
+// streamIdleTimeout is how long a single write may block on a client that is
+// not reading before the stream is closed and its slot released.
+const streamIdleTimeout = 90 * time.Second
+
+type deadlineWriter struct {
+	w  io.Writer
+	rc *http.ResponseController
+}
+
+func (d *deadlineWriter) Write(p []byte) (int, error) {
+	// Ignore "not supported" errors: then behavior is the same as before.
+	_ = d.rc.SetWriteDeadline(time.Now().Add(streamIdleTimeout))
+	return d.w.Write(p)
+}
+
 var log *zap.Logger
 var limiter *security.Limiter
 var slots chan struct{}
@@ -180,11 +195,15 @@ func getStreamRoute(c *gin.Context) {
 		return
 	}
 	c.Status(status)
-	if _, err = c.Writer.Write(first[:n]); err != nil {
+	// A paused or abandoned player stops reading and the socket fills up. Every
+	// write gets a fresh deadline, so a stalled client frees its slot and the
+	// prefetch after streamIdleTimeout. Playing and seeking keep resetting it.
+	dw := &deadlineWriter{w: c.Writer, rc: http.NewResponseController(c.Writer)}
+	if _, err = dw.Write(first[:n]); err != nil {
 		return
 	}
 	c.Writer.Flush()
-	if _, err = io.CopyN(c.Writer, pipe, length-int64(n)); err != nil && requestCtx.Err() == nil && !utils.IsClientDisconnectError(err) {
+	if _, err = io.CopyN(dw, pipe, length-int64(n)); err != nil && requestCtx.Err() == nil && !utils.IsClientDisconnectError(err) {
 		log.Warn("stream interrupted", zap.Int("messageID", id))
 	}
 }

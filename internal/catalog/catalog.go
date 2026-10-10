@@ -32,6 +32,7 @@ type Entry struct {
 	ChannelID int64     `bson:"channel_id"`
 	MessageID int       `bson:"message_id"`
 	Hash      string    `bson:"hash"`
+	Size      int64     `bson:"size,omitempty"`
 	CreatedAt time.Time `bson:"created_at"`
 }
 
@@ -59,7 +60,10 @@ func Open(ctx context.Context, uri, database string) (*Store, error) {
 		_ = client.Disconnect(ctx)
 		return nil, err
 	}
-	return &Store{client, client.Database(database).Collection("lectures")}, nil
+	st := &Store{client, client.Database(database).Collection("lectures")}
+	// Speeds up duplicate checks by message during /data scans. Not required for correctness.
+	_, _ = st.collection.Indexes().CreateOne(ctx, mongo.IndexModel{Keys: bson.D{{Key: "channel_id", Value: 1}, {Key: "message_id", Value: 1}}})
+	return st, nil
 }
 func (s *Store) Close(ctx context.Context) error { return s.client.Disconnect(ctx) }
 func (s *Store) Get(ctx context.Context, slug string) (Entry, error) {

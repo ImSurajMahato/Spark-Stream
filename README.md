@@ -132,6 +132,17 @@ video.src = url; // refetch before expires_at, or on a 403, and restore currentT
 
 Set Referrer-Policy: no-referrer on your website; do not log signed query strings in proxies/analytics. Server logs paths/status only, not query credentials. Put streaming on a separate origin. Cross-origin browser video.src normally works; fetch/canvas access needs deliberately configured CORS, not wildcard credential CORS.
 
+## Bulk import, reset and capacity
+
+Owner-only commands (ALLOWED_USERS, private chat with the bot):
+
+- `/data` scans LOG_CHANNEL and adds every document whose file name ends in `.mp4` to the catalog. The slug is the file name without `.mp4`, nothing else changes. Caption is never stored. Stored per video: slug, channel + message id, size. Duplicate slugs and already-cataloged messages are skipped and counted. The scan runs in the background, sends progress, and keeps a checkpoint in MongoDB, so the next `/data` only scans newer messages. FLOOD_WAIT is honored. The bot must be an admin of the log channel with permission to post: it posts and deletes one short message to learn the newest message id, because bots cannot read channel history.
+- `/remove` asks for confirmation (`/remove CONFIRM` within 60 seconds, anything else cancels), then deletes ALL catalog entries and the `/data` checkpoint. Telegram files are not touched.
+
+`GET /capacity` returns `active_streams`, `max_streams`, `heap_mb`, `rss_mb`, `accepting`. It exposes only these numbers. MAX_ACTIVE_STREAMS accepts 1 to 200. A stream whose client stops reading (paused player) is closed after 90 seconds so its slot frees up; the player reconnects with a Range request when resumed.
+
+Two services can share one repo: give each its own BOT_TOKEN and HOST, and share MONGODB_URI and SIGNING_SECRET.
+
 ## 5,000-10,000 lectures
 
 Count is not simultaneous playback load. The bot uses one LOG_CHANNEL; this version has no multi-channel catalog. IDs can reference 10,000 lectures without keeping their video bytes in RAM; metadata cache is bounded to 10MiB. Your site database owns search/categories. Server still relays EVERY viewer's bytes and needs enough egress. A free 512MB host can sleep or cap bandwidth; do not promise public teaching uptime from that alone.

@@ -39,6 +39,10 @@ func uploadMessage(ctx *ext.Context, u *ext.Update) error {
 		return dispatcher.EndGroups
 	}
 	id := u.EffectiveChat().GetID()
+	// Any other message from the owner cancels a pending /remove confirmation.
+	if !strings.HasPrefix(strings.TrimSpace(u.EffectiveMessage.Text), "/") {
+		disarmRemove(id)
+	}
 	v, _ := ownerLocks.LoadOrStore(id, make(chan struct{}, 1))
 	lock := v.(chan struct{})
 	select {

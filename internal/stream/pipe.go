@@ -11,6 +11,7 @@ import (
 
 	"github.com/celestix/gotgproto"
 	"github.com/gotd/td/tg"
+	"github.com/gotd/td/tgerr"
 	"go.uber.org/zap"
 )
 
@@ -240,6 +241,9 @@ func (p *StreamPipe) prefetch() {
 	}
 }
 
+// maxFloodWait is the longest FLOOD_WAIT a stream request will sit out.
+const maxFloodWait = 5 * time.Second
+
 // downloadBlockWithRetry fetches a block with exponential backoff retry.
 func (p *StreamPipe) downloadBlockWithRetry(offset int64) ([]byte, error) {
 	var lastErr error
@@ -269,6 +273,21 @@ func (p *StreamPipe) downloadBlockWithRetry(offset int64) ([]byte, error) {
 		// don't retry on context cancellation
 		if p.ctx.Err() != nil {
 			return nil, p.ctx.Err()
+		}
+
+		// Telegram asked us to slow down: wait exactly what it requested, but
+		// never stall a viewer longer than maxFloodWait.
+		if wait, ok := tgerr.AsFloodWait(err); ok {
+			if wait > maxFloodWait {
+				return nil, fmt.Errorf("%w: flood wait %s too long: %v", ErrMaxRetriesExceeded, wait, err)
+			}
+			p.log.Warn("telegram flood wait", zap.Duration("wait", wait))
+			select {
+			case <-time.After(wait + 100*time.Millisecond):
+			case <-p.ctx.Done():
+				return nil, p.ctx.Err()
+			}
+			continue
 		}
 
 		// exponential backoff
