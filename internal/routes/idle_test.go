@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-type nopWriter struct{ n int }
-
 func (w *nopWriter) Write(p []byte) (int, error) { w.n += len(p); return len(p), nil }
 
 func TestDeadlineWriterPassesData(t *testing.T) {
