@@ -104,3 +104,8 @@ func (s *Store) RemoveAll(ctx context.Context) (int64, error) {
 	}
 	return res.DeletedCount, nil
 }
+
+// Count returns how many catalog entries exist.
+func (s *Store) Count(ctx context.Context) (int64, error) {
+	return s.collection.CountDocuments(ctx, bson.M{})
+}
