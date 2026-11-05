@@ -17,24 +17,24 @@ func TestSignedLinks(t *testing.T) {
 	link := Link("https://test.invalid/", key, 12, hash, now.Add(time.Hour).Unix())
 	u, _ := url.Parse(link)
 	q := u.Query()
-	if !Verify(key, 12, hash, q.Get("expires"), q.Get("sig"), now, 2*time.Hour) {
+	if !Verify(key, 12, hash, q.Get("expires"), q.Get("signature"), now, 2*time.Hour) {
 		t.Fatal("valid link rejected")
 	}
 	for _, tc := range []struct {
 		id             int
 		hash, exp, sig string
 	}{
-		{13, hash, q.Get("expires"), q.Get("sig")}, {12, strings.Repeat("b", 32), q.Get("expires"), q.Get("sig")},
-		{12, hash, "1700000000", q.Get("sig")}, {12, hash, "1709999999", q.Get("sig")}, {12, hash, q.Get("expires"), ""},
+		{13, hash, q.Get("expires"), q.Get("signature")}, {12, strings.Repeat("b", 32), q.Get("expires"), q.Get("signature")},
+		{12, hash, "1700000000", q.Get("signature")}, {12, hash, "1709999999", q.Get("signature")}, {12, hash, q.Get("expires"), ""},
 	} {
 		if Verify(key, tc.id, tc.hash, tc.exp, tc.sig, now, 2*time.Hour) {
 			t.Fatal("tampered link accepted")
 		}
 	}
-	if Verify("short", 12, hash, q.Get("expires"), q.Get("sig"), now, 2*time.Hour) {
+	if Verify("short", 12, hash, q.Get("expires"), q.Get("signature"), now, 2*time.Hour) {
 		t.Fatal("short secret accepted")
 	}
-	if Verify(key, 12, hash, q.Get("expires"), q.Get("sig"), now.Add(time.Hour), 2*time.Hour) {
+	if Verify(key, 12, hash, q.Get("expires"), q.Get("signature"), now.Add(time.Hour), 2*time.Hour) {
 		t.Fatal("expired accepted")
 	}
 }

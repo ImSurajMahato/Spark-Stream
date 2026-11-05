@@ -100,8 +100,8 @@ func getStreamRoute(c *gin.Context) {
 		c.AbortWithStatus(400)
 		return
 	}
-	hash := c.Query("hash")
-	if !security.Verify(config.ValueOf.SigningSecret, id, hash, c.Query("expires"), c.Query("sig"), time.Now(), time.Duration(config.ValueOf.LinkTTLSeconds)*time.Second) {
+	hash := c.Query("policy")
+	if !security.Verify(config.ValueOf.SigningSecret, id, hash, c.Query("expires"), c.Query("signature"), time.Now(), time.Duration(config.ValueOf.LinkTTLSeconds)*time.Second) {
 		c.AbortWithStatus(http.StatusForbidden)
 		return
 	}

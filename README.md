@@ -60,7 +60,7 @@ The bot waits for this file to finish before accepting another file. A second up
 123 means the actual message ID in your configured log channel, NOT the ID from your original private chat. The bot checks the media, computes its hash and inserts the mapping. Allowed IDs: 1-64 ASCII letters, digits, underscore or hyphen. IDs are case-sensitive. Random IDs use crypto/rand. A duplicate ID for another lecture is rejected, never silently overwritten. Same-file retries are idempotent. You can create multiple aliases for one lecture. No delete/rebind command is provided.
 
 3. Share the returned `https://t.me/YOUR_REAL_BOT_USERNAME?start=6a2698f9735cb5428a449a0a`. YOUR_REAL_BOT_USERNAME is your deployed BotFather bot, not the example @streambot. The first visit may require pressing Start in Telegram. The bot resolves /start ID from MongoDB and shows two inline buttons: **Get Stream Link** and **Get File**. Get Stream Link generates a fresh signed HTTPS URL when clicked. Get File copies the actual media from LOG_CHANNEL into the student's private chat using Telegram server-side delivery, without downloading the full file into this host. Captions and forward attribution are stripped. Protected-content restrictions and Telegram flood limits are respected; failure returns an error, not a bypass. Deleted/changed source media fails closed.
-4. Student copies the COMPLETE URL including hash/expires/sig into MX Player's Network stream or VLC's Open network stream. This returns a URL, not an automatic app-launch guarantee. MP4 H.264/AAC is the practical trial format. Actual MX/VLC playback is not verified yet.
+4. Student copies the COMPLETE URL including expires/policy/signature into MX Player's Network stream or VLC's Open network stream. This returns a URL, not an automatic app-launch guarantee. MP4 H.264/AAC is the practical trial format. Actual MX/VLC playback is not verified yet.
 
 **4 hours kya expire hota hai?** Only the generated stream URL, counted from issuance, not the permanent custom ID, original log-channel file or lecture catalog row. LINK_TTL_SECONDS must be 14400. Each Get Stream Link button click issues a URL with a new expiry; requests in the same second can return the same URL. At exactly expiry new GET/HEAD/seek/reconnect requests get 403. A connection opened before expiry can continue; it is not forcibly cut off at the four-hour mark. Open the same permanent bot link to obtain another four-hour URL.
 
@@ -106,7 +106,7 @@ curl "$STREAM_HOST/api/stream?videoId=6a2698f9735cb5428a449a0a" \
 Success (200):
 
 ```json
-{"videoId":"6a2698f9735cb5428a449a0a","url":"https://your-host/stream/123?hash=...&expires=...&sig=...","expires_at":"2026-10-10T03:30:00Z","expires":1791603000}
+{"videoId":"6a2698f9735cb5428a449a0a","url":"https://your-host/stream/123?expires=...&policy=...&signature=...","expires_at":"2026-10-10T03:30:00Z","expires":1791603000}
 ```
 
 Errors are JSON like {"error":"not_found","message":"..."}: 401 unauthorized (missing or wrong key), 400 bad_video_id, 404 not_found, 429 rate_limited (per IP, see rate limit settings), 503 catalog_unavailable or catalog_error. The key can also be sent as Authorization: Bearer KEY.

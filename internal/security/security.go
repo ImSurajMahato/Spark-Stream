@@ -42,7 +42,7 @@ func Verify(secret string, id int, hash, expiry, sig string, now time.Time, maxT
 }
 
 func Link(host, secret string, id int, hash string, exp int64) string {
-	q := url.Values{"hash": {hash}, "expires": {strconv.FormatInt(exp, 10)}, "sig": {Signature(secret, id, hash, exp)}}
+	q := url.Values{"policy": {hash}, "expires": {strconv.FormatInt(exp, 10)}, "signature": {Signature(secret, id, hash, exp)}}
 	return fmt.Sprintf("%s/stream/%d?%s", strings.TrimRight(host, "/"), id, q.Encode())
 }
 
