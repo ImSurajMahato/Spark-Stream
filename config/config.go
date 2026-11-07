@@ -57,6 +57,7 @@ type config struct {
 	SigningSecret     string `envconfig:"SIGNING_SECRET" required:"true"`
 	LinkTTLSeconds    int    `envconfig:"LINK_TTL_SECONDS" default:"14400"`
 	MintAPIKey        string `envconfig:"MINT_API_KEY"`
+	APIAuth           bool   `envconfig:"API_AUTH" default:"false"`
 	MaxActiveStreams  int    `envconfig:"MAX_ACTIVE_STREAMS" default:"8"`
 	RequestsPerMinute int    `envconfig:"REQUESTS_PER_MINUTE" default:"120"`
 	RequestBurst      int    `envconfig:"REQUEST_BURST" default:"30"`

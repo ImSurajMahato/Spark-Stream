@@ -94,12 +94,23 @@ curl -X POST "$STREAM_HOST/api/link/$MESSAGE_ID" \
 
 Response: JSON with url and expires. Set video.src to url. Request fresh URL before expiry, or retry once with a refreshed URL on a 403 and restore video.currentTime. No automated player refresh implementation is included. Existing connections may finish after link expiry; new range requests cannot. A valid URL is shareable until expiry; this is not DRM or per-student binding. Rotating SIGNING_SECRET invalidates all old URLs.
 
-### Video ID API: GET /api/stream?videoId=SLUG
+### Video ID API: /api/stream?videoId=SLUG
 
-Lets your website ask for a fresh 4 hour stream URL using the lecture slug (the ID you set in the bot after upload). Needs MINT_API_KEY set (add it in Railway Variables, 32+ random characters, different from SIGNING_SECRET). Without it the endpoint is not registered. Slugs come from MongoDB, so MONGODB_URI must be working.
+Lets your website ask for a fresh 4 hour stream URL using the lecture slug (the ID you set in the bot after upload). Slugs come from MongoDB, so MONGODB_URI must be working. Two modes, set by API_AUTH:
+
+- API_AUTH=false (default): public mode. Simple GET, no key. Anyone who knows a videoId can mint a link, so use this only when that is fine for you.
+- API_AUTH=true: GET is blocked (405 JSON error). Use POST with MINT_API_KEY (Railway/Heroku config var, 32+ random characters, different from SIGNING_SECRET). Without MINT_API_KEY the endpoint is not registered at all.
+
+Public mode (API_AUTH=false):
 
 ```sh
-curl "$STREAM_HOST/api/stream?videoId=6a2698f9735cb5428a449a0a" \
+curl "$STREAM_HOST/api/stream?videoId=6a2698f9735cb5428a449a0a"
+```
+
+Key mode (API_AUTH=true):
+
+```sh
+curl -X POST "$STREAM_HOST/api/stream?videoId=6a2698f9735cb5428a449a0a" \
   -H "X-API-Key: $MINT_API_KEY"
 ```
 
@@ -109,16 +120,16 @@ Success (200):
 {"videoId":"6a2698f9735cb5428a449a0a","url":"https://your-host/stream/123?expires=...&policy=...&signature=...","expires_at":"2026-10-10T03:30:00Z","expires":1791603000}
 ```
 
-Errors are JSON like {"error":"not_found","message":"..."}: 401 unauthorized (missing or wrong key), 400 bad_video_id, 404 not_found, 429 rate_limited (per IP, see rate limit settings), 503 catalog_unavailable or catalog_error. The key can also be sent as Authorization: Bearer KEY.
+Errors are JSON like {"error":"not_found","message":"..."}: 401 unauthorized (missing or wrong key, key mode only), 400 bad_video_id, 404 not_found, 405 method_not_allowed (GET while API_AUTH=true), 429 rate_limited (per IP, see rate limit settings), 503 catalog_unavailable or catalog_error. The key can also be sent as Authorization: Bearer KEY.
 
-The key must stay on YOUR website backend. A browser page cannot call this directly without exposing the key, and there is no key-free mode on purpose (anyone with a slug could then mint links forever). Flow: player page calls your backend, e.g. /my-video?videoId=abc, your backend checks the student is logged in, calls this API with the key, and returns {url} to the page. Node example for the backend:
+In key mode the key must stay on YOUR website backend: player page calls your backend, e.g. /my-video?videoId=abc, your backend checks the student is logged in, calls this API with the key, and returns {url} to the page. In public mode (API_AUTH=false) a page can call the API directly, but then anyone with a slug can mint links forever.
 
 ```js
 // Express route on YOUR website backend
 app.get('/my-video', async (req, res) => {
   // check the user's login/enrollment here first
   const r = await fetch(`${process.env.STREAM_HOST}/api/stream?videoId=${encodeURIComponent(req.query.videoId)}`,
-    { headers: { 'X-API-Key': process.env.MINT_API_KEY } });
+    { method: 'POST', headers: { 'X-API-Key': process.env.MINT_API_KEY } });
   res.status(r.status).json(await r.json());
 });
 ```

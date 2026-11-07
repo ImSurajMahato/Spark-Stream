@@ -16,13 +16,23 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
-// LoadAPI registers GET /api/stream?videoId=<slug>. It is only enabled when MINT_API_KEY is set.
+// LoadAPI registers /api/stream?videoId=<slug>.
+// API_AUTH=false (default): public mode, GET with no key - anyone with a videoId can mint a link.
+// API_AUTH=true: GET is blocked; POST /api/stream needs MINT_API_KEY (X-API-Key or Bearer header),
+// and the endpoint registers only when MINT_API_KEY is set.
 // The key is for your website BACKEND. Never put it in browser JavaScript.
 func (e *allRoutes) LoadAPI(r *Route) {
+	if !config.ValueOf.APIAuth {
+		r.Engine.GET("/api/stream", streamAPI)
+		return
+	}
 	if config.ValueOf.MintAPIKey == "" {
 		return
 	}
-	r.Engine.GET("/api/stream", streamAPI)
+	r.Engine.POST("/api/stream", streamAPI)
+	r.Engine.GET("/api/stream", func(c *gin.Context) {
+		apiError(c, http.StatusMethodNotAllowed, "method_not_allowed", "API_AUTH=true: use POST /api/stream with X-API-Key.")
+	})
 }
 
 func apiError(c *gin.Context, status int, code, msg string) {
@@ -53,7 +63,7 @@ func streamAPI(c *gin.Context) {
 		apiError(c, http.StatusTooManyRequests, "rate_limited", "Too many requests, retry shortly.")
 		return
 	}
-	if !keyOK(apiKeyFrom(c), config.ValueOf.MintAPIKey) {
+	if config.ValueOf.APIAuth && !keyOK(apiKeyFrom(c), config.ValueOf.MintAPIKey) {
 		apiError(c, http.StatusUnauthorized, "unauthorized", "Missing or invalid API key. Send X-API-Key or Authorization: Bearer.")
 		return
 	}
