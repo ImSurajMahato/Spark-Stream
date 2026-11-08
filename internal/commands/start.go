@@ -3,8 +3,8 @@ package commands
 import (
 	"EverythingSuckz/fsb/config"
 	"EverythingSuckz/fsb/internal/catalog"
-	
-"EverythingSuckz/fsb/internal/security"
+
+	"EverythingSuckz/fsb/internal/security"
 
 	"EverythingSuckz/fsb/internal/utils"
 	"context"
@@ -36,7 +36,7 @@ func start(ctx *ext.Context, u *ext.Update) error {
 	}
 	args := strings.Fields(u.EffectiveMessage.Text)
 	if len(args) == 1 {
-		ctx.Reply(u, ext.ReplyTextString("Open a lecture link, then choose Get Stream Link or Get File. Owners: send one file and enter its slug when asked, or /skip for random ID."), nil)
+		ctx.Reply(u, ext.ReplyTextString(fmt.Sprintf("Spark Stream - your secure lecture database.\n\nHow it works:\n1. Open a lecture link (t.me/%s?start=<ID>).\n2. Choose Get Stream Link to watch instantly, or Get File for a protected copy.\n\nStream links stay valid for 4 hours. Files are auto-deleted 4 hours after delivery.\n\nOwners: send one file and enter its slug when asked, or /skip for a random ID.", ctx.Self.Username)), nil)
 		return dispatcher.EndGroups
 	}
 	if len(args) != 2 || !catalog.ValidSlug(args[1]) {
@@ -64,11 +64,12 @@ func start(ctx *ext.Context, u *ext.Update) error {
 		ctx.Reply(u, ext.ReplyTextString("Lecture unavailable. Check the ID or try again later."), nil)
 		return dispatcher.EndGroups
 	}
-	markup := &tg.ReplyInlineMarkup{Rows: []tg.KeyboardButtonRow{{Buttons: []tg.KeyboardButtonClass{
-		&tg.KeyboardButtonCallback{Text: "Get Stream Link", Data: []byte(fmt.Sprintf("s:%d", entry.MessageID))},
-		&tg.KeyboardButtonCallback{Text: "Get File", Data: []byte(fmt.Sprintf("f:%d", entry.MessageID))},
-	}}}}
-	_, err = ctx.Reply(u, ext.ReplyTextString("Choose how to open this lecture. Stream links last 4 hours from button click. Get File sends a protected Telegram copy with auto-delete scheduled 4 hours from its delivery request. Normal forwarding/saving is disabled; this is not DRM and deletion may be late if the bot is offline."), &ext.ReplyOpts{Markup: markup, NoWebpage: true})
+	streamButton := &tg.KeyboardButtonCallback{Text: "Get Stream Link", Data: []byte(fmt.Sprintf("s:%d", entry.MessageID))}
+	streamButton.SetStyle(tg.KeyboardButtonStyle{BgSuccess: true})
+	fileButton := &tg.KeyboardButtonCallback{Text: "Get File", Data: []byte(fmt.Sprintf("f:%d", entry.MessageID))}
+	fileButton.SetStyle(tg.KeyboardButtonStyle{BgPrimary: true})
+	markup := &tg.ReplyInlineMarkup{Rows: []tg.KeyboardButtonRow{{Buttons: []tg.KeyboardButtonClass{streamButton, fileButton}}}}
+	_, err = ctx.Reply(u, ext.ReplyTextString("Lecture ready. Choose how to open it:\n\n- Get Stream Link: plays instantly in MX Player or VLC; the link stays valid for 4 hours.\n- Get File: a protected copy in Telegram, auto-deleted 4 hours after delivery.\n\nForwarding and saving are disabled. This is not DRM, and deletion can be delayed if the bot is offline."), &ext.ReplyOpts{Markup: markup, NoWebpage: true})
 	if err != nil {
 		return err
 	}
