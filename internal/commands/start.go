@@ -36,7 +36,7 @@ func start(ctx *ext.Context, u *ext.Update) error {
 	}
 	args := strings.Fields(u.EffectiveMessage.Text)
 	if len(args) == 1 {
-		ctx.Reply(u, ext.ReplyTextString(fmt.Sprintf("Spark Stream - your secure lecture database.\n\nHow it works:\n1. Open a lecture link (t.me/%s?start=<ID>).\n2. Choose Get Stream Link to watch instantly, or Get File for a protected copy.\n\nStream links stay valid for 4 hours. Files are auto-deleted 4 hours after delivery.\n\nOwners: send one file and enter its slug when asked, or /skip for a random ID.", ctx.Self.Username)), nil)
+		ctx.Reply(u, ext.ReplyTextString(fmt.Sprintf("Spark Stream - your lecture database bot.\n\nHow it works:\n1. Open a lecture link (t.me/%s?start=<ID>).\n2. Choose Get Stream Link to watch instantly, or Get File for a protected copy.\n\nStream links stay valid for 4 hours. Files are auto-deleted 4 hours after delivery.\n\nOwners: send one file and enter its slug when asked, or /skip for a random ID.", ctx.Self.Username)), nil)
 		return dispatcher.EndGroups
 	}
 	if len(args) != 2 || !catalog.ValidSlug(args[1]) {
