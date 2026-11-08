@@ -6,7 +6,7 @@ require (
 	github.com/celestix/gotgproto v1.0.0-beta21
 	github.com/gin-gonic/gin v1.9.1
 	github.com/glebarez/sqlite v1.11.0
-	github.com/gotd/td v0.161.0
+	github.com/gotd/td v0.154.0
 	github.com/joho/godotenv v1.5.1
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/spf13/cobra v1.8.0
